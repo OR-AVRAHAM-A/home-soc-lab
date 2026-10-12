@@ -1,0 +1,84 @@
+! SW1 - Cisco IOL L2 15.2 - startup-config
+! Role: access switch, 802.1Q trunk to R1
+!
+hostname SW1
+!
+vtp mode transparent
+no ip domain-lookup
+!
+spanning-tree mode pvst
+spanning-tree extend system-id
+!
+vlan 10
+ name USERS
+vlan 30
+ name MGMT
+vlan 99
+ name DMZ
+vlan 100
+ name SERVERS
+vlan 666
+ name BLACK-HOLE
+vlan 999
+ name native
+!
+interface Ethernet0/0
+ description "CONNECT TO R1"
+ switchport trunk allowed vlan 10,30,99,100
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 999
+ switchport mode trunk
+ switchport nonegotiate
+!
+interface Ethernet0/1
+ description CONNECT TO WIN 10
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+!
+interface Ethernet0/2
+ description CONNECT TO DC01
+ switchport access vlan 100
+ switchport mode access
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+!
+interface Ethernet0/3
+ description CONNECT TO WAZUH
+ switchport access vlan 30
+ switchport mode access
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+!
+interface Ethernet1/0
+ description CONNECT TO UBUNTU
+ switchport access vlan 99
+ switchport mode access
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+!
+interface Ethernet1/1
+ switchport access vlan 666
+ switchport mode access
+ shutdown
+!
+interface Ethernet1/2
+ switchport access vlan 666
+ switchport mode access
+ shutdown
+!
+interface Ethernet1/3
+ switchport access vlan 666
+ switchport mode access
+ shutdown
+!
+ip http server
+ip http secure-server
+!
+line con 0
+ logging synchronous
+line vty 0 4
+ login
+!
+end

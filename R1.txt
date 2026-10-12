@@ -1,0 +1,55 @@
+! R1 - Cisco IOL L3 15.7 - startup-config
+! Role: Router-on-a-Stick, inter-VLAN routing, DHCP relay
+!
+hostname R1
+!
+interface Ethernet0/0
+ description TRANSIT-TO-PFSENSE
+ ip address 10.10.10.254 255.255.255.252
+!
+interface Ethernet0/1
+ no ip address
+!
+interface Ethernet0/1.10
+ description DG of WIN 10
+ encapsulation dot1Q 10
+ ip address 192.168.10.254 255.255.255.0
+ ip helper-address 192.168.100.100
+!
+interface Ethernet0/1.30
+ description DG of Wazuh
+ encapsulation dot1Q 30
+ ip address 192.168.30.254 255.255.255.0
+!
+interface Ethernet0/1.99
+ description DG of Ubuntu
+ encapsulation dot1Q 99
+ ip address 192.168.99.254 255.255.255.0
+!
+interface Ethernet0/1.100
+ description DG of DC01
+ encapsulation dot1Q 100
+ ip address 192.168.100.254 255.255.255.0
+!
+interface Ethernet0/1.999
+ encapsulation dot1Q 999 native
+!
+interface Ethernet0/2
+ no ip address
+ shutdown
+!
+interface Ethernet0/3
+ no ip address
+ shutdown
+!
+no ip http server
+no ip http secure-server
+ip route 0.0.0.0 0.0.0.0 10.10.10.253
+!
+line con 0
+ logging synchronous
+line vty 0 4
+ login
+ transport input none
+!
+end
