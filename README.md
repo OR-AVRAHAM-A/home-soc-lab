@@ -2,9 +2,9 @@
 
 A home lab that simulates a small enterprise network (`cyber.local`). I use it to practice the full cycle: **attack → logs → detection → investigation → incident report**.
 
-It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Workstation** (Active Directory, a Windows client, Kali Linux, and a Wazuh SIEM (planned).
+It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Workstation** (Active Directory, a Windows client, Kali Linux, and a Wazuh SIEM).
 
-> Status: 🚧 In progress. Network phase complete (VLANs, Inter-VLAN routing, DHCP relay).
+> Status: 🚧 In progress. Network and firewall phases complete (VLANs, Inter-VLAN routing, DHCP relay, pfSense rules and NAT).
 
 ---
 
@@ -44,8 +44,8 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 | 1 | Planning                      | ✅ Done       |
 | 2 | Virtualization & Images       | ✅ Done       |
 | 3 | Network (VLANs, Routing, DHCP)| ✅ Done       |
-| 4 | Firewall (pfSense)            | 🔄 Next       |
-| 5 | Active Directory hardening    | ⏳ Planned    |
+| 4 | Firewall (pfSense)            | ✅ Done       |
+| 5 | Active Directory hardening    | 🔄 Next       |
 | 6 | Logging (Sysmon, Wazuh)       | ⏳ Planned    |
 | 7 | Attack simulation             | ⏳ Planned    |
 | 8 | Detection & Investigation     | ⏳ Planned    |
@@ -61,6 +61,19 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 - VTP transparent mode
 - DHCP is relayed via `ip helper-address`. The servers VLAN uses static IPs only.
 
+## Firewall Policy (pfSense)
+
+- Default deny: the "allow LAN to any" rule is disabled. Each allowed flow has its own rule.
+- The DMZ may not initiate any outbound connection (logged).
+- Users: web only (80, 443). DC01: DNS only. Management: HTTPS only.
+- Hybrid outbound NAT hides all internal VLANs behind the WAN address.
+- Details: [configs/pfSense.md](configs/pfSense.md), [docs/firewall-design.md](docs/firewall-design.md), [verification/phase4-firewall.md](verification/phase4-firewall.md)
+
+## Known Risks
+
+- Kali has a second adapter (VMware NAT) that bypasses pfSense. It is kept **disconnected** and enabled only for updates.
+- Log time zones are not unified yet (planned NTP fix before the SIEM phase).
+
 ## Repository Structure
 
 ```
@@ -69,6 +82,7 @@ home-soc-lab/
 ├── configs/          # Device configurations (R1, SW1, ...)
 ├── diagrams/         # Topology diagrams
 ├── docs/             # IP plan, design decisions
+├── screenshots/      # GUI evidence per phase (no credentials)
 └── verification/     # Test outputs proving each phase works
 ```
 
