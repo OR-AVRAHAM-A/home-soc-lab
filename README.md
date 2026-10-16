@@ -4,13 +4,13 @@ A home lab that simulates a small enterprise network (`cyber.local`). I use it t
 
 It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Workstation** (Active Directory, a Windows client, Kali Linux, and a Wazuh SIEM).
 
-> Status: 🚧 In progress. Network and firewall phases complete (VLANs, Inter-VLAN routing, DHCP relay, pfSense rules and NAT).
+> Status: 🚧 In progress. Network and firewall phases complete. DMZ web server (DVWA) is up and isolated.
 
 ---
 
 ## Architecture
 
-![Topology](diagrams/topology-v1.png)
+![Topology](diagrams/topology-v2.png)
 
 | Segment       | VLAN | Subnet            | Gateway          | Hosts                          |
 |---------------|------|-------------------|------------------|--------------------------------|
@@ -30,11 +30,11 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 | Virtualization   | VMware Workstation Pro + EVE-NG Community 6.2       |
 | Routing          | Cisco IOL L3 15.7 (Router-on-a-Stick)               |
 | Switching        | Cisco IOL L2 (802.1Q trunk, access ports)           |
-| Firewall         | pfSense CE 2.6                                      |
+| Firewall         | pfSense CE 2.6.0                                    |
 | Identity         | Windows Server 2019 (AD DS, DNS, DHCP) `cyber.local`|
 | Endpoint         | Windows 10 Enterprise (domain-joined)               |
 | Attacker         | Kali Linux                                          |
-| Web target       | Ubuntu Server 22.04 (DMZ)                           |
+| Web target       | Ubuntu 22.04 cloud image + Docker + DVWA (DMZ)      |
 | SIEM             | Wazuh (planned)                                     |
 
 ## Project Phases
@@ -45,11 +45,12 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 | 2 | Virtualization & Images       | ✅ Done       |
 | 3 | Network (VLANs, Routing, DHCP)| ✅ Done       |
 | 4 | Firewall (pfSense)            | ✅ Done       |
-| 5 | Active Directory hardening    | 🔄 Next       |
-| 6 | Logging (Sysmon, Wazuh)       | ⏳ Planned    |
-| 7 | Attack simulation             | ⏳ Planned    |
-| 8 | Detection & Investigation     | ⏳ Planned    |
-| 9 | Incident Report               | ⏳ Planned    |
+| 5 | DMZ web server (DVWA) + DMZ isolation | 🔄 In progress |
+| 6 | Active Directory hardening    | ⏳ Planned    |
+| 7 | Logging (Sysmon, Wazuh)       | ⏳ Planned    |
+| 8 | Attack simulation             | ⏳ Planned    |
+| 9 | Detection & Investigation     | ⏳ Planned    |
+| 10 | Incident Report              | ⏳ Planned    |
 
 ## Network Hardening Applied (so far)
 
@@ -69,10 +70,20 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 - Hybrid outbound NAT hides all internal VLANs behind the WAN address.
 - Details: [configs/pfSense.md](configs/pfSense.md), [docs/firewall-design.md](docs/firewall-design.md), [verification/phase4-firewall.md](verification/phase4-firewall.md)
 
+## DMZ (Phase 5)
+
+- Ubuntu-Web (`192.168.99.10`) runs DVWA in Docker, bound to the DMZ interface only.
+- R1 ACL `DMZ-IN` blocks the DMZ from starting connections to internal networks and to the firewall. pfSense blocks it from the internet. Both log.
+- Details: [configs/ubuntu-web.md](configs/ubuntu-web.md), [docs/dmz-design.md](docs/dmz-design.md), [verification/phase5-dmz.md](verification/phase5-dmz.md)
+- Problems I hit and how I solved them: [docs/troubleshooting-log.md](docs/troubleshooting-log.md)
+
 ## Known Risks
 
 - Kali has a second adapter (VMware NAT) that bypasses pfSense. It is kept **disconnected** and enabled only for updates.
 - Log time zones are not unified yet (planned NTP fix before the SIEM phase).
+- Any internal VLAN can open SSH to the DMZ (planned: allow only from VLAN 30).
+- pfSense is managed from the Users VLAN (planned: admin GUI reachable only from VLAN 30).
+- pfSense CE 2.6.0 (2022) is outdated; newer CE releases exist. Acceptable in an isolated lab, but it would be patched in production.
 
 ## Repository Structure
 

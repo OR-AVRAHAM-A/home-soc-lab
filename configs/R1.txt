@@ -1,5 +1,5 @@
 ! R1 - Cisco IOL L3 15.7 - startup-config
-! Role: Router-on-a-Stick, inter-VLAN routing, DHCP relay
+! Role: Router-on-a-Stick, inter-VLAN routing, DHCP relay, DMZ isolation (ACL)
 !
 hostname R1
 !
@@ -25,6 +25,7 @@ interface Ethernet0/1.99
  description DG of Ubuntu
  encapsulation dot1Q 99
  ip address 192.168.99.254 255.255.255.0
+ ip access-group DMZ-IN in
 !
 interface Ethernet0/1.100
  description DG of DC01
@@ -45,6 +46,20 @@ interface Ethernet0/3
 no ip http server
 no ip http secure-server
 ip route 0.0.0.0 0.0.0.0 10.10.10.253
+!
+ip access-list extended DMZ-IN
+ remark Replies to sessions opened from inside (DVWA -> users)
+ permit tcp 192.168.99.0 0.0.0.255 192.168.0.0 0.0.255.255 established
+ remark Ping replies for troubleshooting
+ permit icmp 192.168.99.0 0.0.0.255 192.168.0.0 0.0.255.255 echo-reply
+ remark DMZ may not start connections to internal networks
+ deny   ip 192.168.99.0 0.0.0.255 192.168.0.0 0.0.255.255 log
+ remark DMZ may not reach the firewall/transit network
+ deny   ip 192.168.99.0 0.0.0.255 10.10.10.252 0.0.0.3 log
+ remark Internet-bound traffic goes on to pfSense (blocked + logged there)
+ permit ip 192.168.99.0 0.0.0.255 any
+ remark Anything else = spoofed source
+ deny   ip any any log
 !
 line con 0
  logging synchronous
