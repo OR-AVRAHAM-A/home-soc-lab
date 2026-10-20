@@ -208,13 +208,14 @@
 <polyline points="1183,398 1187,402 1194,394" fill="none" stroke="#0b1220" stroke-width="2.5"/>
 <text x="1212" y="403" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="13" font-weight="600" fill="#e2e8f0" text-anchor="start" > 5  DMZ web server + isolation</text>
 <line x1="1188" y1="460" x2="1188" y2="486" stroke="#334155" stroke-width="2"/>
-<circle cx="1188" cy="448" r="11" fill="none" stroke="#f59e0b" stroke-width="3"/><circle cx="1188" cy="448" r="4.5" fill="#f59e0b"/>
+<circle cx="1188" cy="448" r="11" fill="#22c55e"/>
+<polyline points="1183,448 1187,452 1194,444" fill="none" stroke="#0b1220" stroke-width="2.5"/>
 <text x="1212" y="453" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="13" font-weight="600" fill="#e2e8f0" text-anchor="start" > 6  Logging: NTP, Wazuh, Sysmon</text>
-<rect x="1490" y="438" width="30" height="20" rx="10" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.6"/>
-<text x="1504.8" y="452" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="11" font-weight="600" fill="#f59e0b" text-anchor="middle" >now</text>
 <line x1="1188" y1="510" x2="1188" y2="536" stroke="#334155" stroke-width="2"/>
-<circle cx="1188" cy="498" r="10" fill="none" stroke="#475569" stroke-width="2"/>
-<text x="1212" y="503" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start" > 7  Active Directory hardening</text>
+<circle cx="1188" cy="498" r="11" fill="none" stroke="#f59e0b" stroke-width="3"/><circle cx="1188" cy="498" r="4.5" fill="#f59e0b"/>
+<text x="1212" y="503" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="13" font-weight="600" fill="#e2e8f0" text-anchor="start" > 7  Active Directory hardening</text>
+<rect x="1490" y="488" width="37" height="20" rx="10" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.6"/>
+<text x="1508.4" y="502" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="11" font-weight="600" fill="#f59e0b" text-anchor="middle" >next</text>
 <line x1="1188" y1="560" x2="1188" y2="586" stroke="#334155" stroke-width="2"/>
 <circle cx="1188" cy="548" r="10" fill="none" stroke="#475569" stroke-width="2"/>
 <text x="1212" y="553" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="13" font-weight="400" fill="#94a3b8" text-anchor="start" > 8  Attack simulation</text>
