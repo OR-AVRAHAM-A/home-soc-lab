@@ -34,6 +34,18 @@ Applied **inbound on `e0/1.99`**, so it inspects every packet that enters the ro
 - **Defense in depth:** the DMZ is blocked twice, by R1 (internal + transit) and by pfSense (internet). Each device logs its own decision.
 - **Side effect (intended):** the DMZ cannot reach R1's own addresses (e.g. `192.168.99.254`), since they are inside 192.168.0.0/16. Routing through R1 is not affected.
 
+## Publishing the web server
+
+pfSense **Port Forward** (destination NAT): `WAN address:80 -> 192.168.99.10:80`, with an associated, logged WAN pass rule.
+
+```
+Kali 10.20.20.254 -> pfSense WAN 10.20.20.1:80 --(dst NAT)--> 192.168.99.10:80 -> R1 -> Ubuntu-Web -> DVWA
+```
+
+- Only the destination is rewritten, so the web server logs the attacker's real IP.
+- Only TCP/80 is exposed (verified with nmap: every other port is `filtered`).
+- Allowed traffic is logged, not only blocked traffic, so attacks against DVWA are visible later in the SIEM.
+
 ## Temporary internet link for installation
 
 The lab has no real internet. To install Docker and DVWA, Ubuntu-Web got a second NIC (`ens4`) connected to EVE-NG's `Management(Cloud0)` network (VMware NAT) for the installation only:
@@ -52,5 +64,6 @@ The lab has no real internet. To install Docker and DVWA, Ubuntu-Web got a secon
 | Any internal VLAN (including Users) can open SSH to the DMZ. `DMZ-IN` only filters traffic leaving the DMZ. | Hardening phase: outbound ACL on `e0/1.99` allowing SSH only from VLAN 30 (Mgmt). |
 | `established` can be bypassed with forged ACK packets. | Accepted for the lab. Documented above. |
 | R1 sends ICMP "administratively prohibited" on denied packets, which reveals the ACL to an attacker. | Hardening phase: `no ip unreachables` on `e0/1.99`. |
-| Clocks differ between devices (Ubuntu-Web, R1 and pfSense all show different times). | NTP + a single time zone before the SIEM phase. |
-| DVWA is deliberately vulnerable. | Bound to the DMZ IP only, isolated by R1 and pfSense, never exposed to a real network. |
+| Clocks differ between devices (Ubuntu-Web, R1 and pfSense all show different times). | **Resolved in Phase 6:** NTP from R1, infrastructure in UTC. See [logging-design.md](logging-design.md). |
+| DVWA is deliberately vulnerable and published on the (fake) internet. | That is the point: it is the attack target. It is reachable only from the isolated lab, bound to the DMZ IP, and boxed in by R1 + pfSense. |
+| WAN rule allows any source to DVWA. | Expected for a public web server. Rate limiting / a WAF are possible future improvements. |

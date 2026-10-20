@@ -1,4 +1,4 @@
-# pfSense Configuration (Phase 4)
+# pfSense Configuration (Phases 4-5)
 
 > This is a summary of the running configuration. The full `config.xml` backup is **not** stored in this repository, because it contains password hashes.
 
@@ -53,3 +53,54 @@
 | WAN       | INTERNAL_NETS  | WAN address  | NAT internal VLANs to WAN address |
 
 - **Reason:** automatic outbound NAT only creates rules for interfaces that have an upstream gateway. WAN has none, so the automatic list was empty.
+
+## Port Forward (Phase 5): publish DVWA
+
+| Interface | Protocol | Destination        | NAT IP          | NAT Port | Description                         |
+|-----------|----------|--------------------|-----------------|----------|-------------------------------------|
+| WAN       | TCP      | WAN address : 80   | 192.168.99.10   | 80       | Publish DVWA (DMZ) to the internet  |
+
+- **Filter rule association:** the matching WAN pass rule was created automatically and stays linked to the NAT rule.
+- **Logging enabled** on that WAN rule: allowed connections to DVWA are logged too, not only blocks. Every attack attempt in later phases will be visible.
+- Only port 80 is published. Everything else on the WAN address stays behind the default deny.
+
+## Firewall Rules: WAN
+
+| # | Action | Source | Protocol | Destination        | Port | Log | Description |
+|---|--------|--------|----------|--------------------|------|-----|-------------|
+| - | Block  | bogons | any      | any                | any  | -   | Block bogon networks (system) |
+| 1 | Pass   | any    | TCP      | 192.168.99.10      | 80   | Yes | NAT Publish DVWA (DMZ) to the internet |
+| - | Block  | any    | any      | any                | any  | Yes | Implicit default deny |
+
+## Admin Access (webConfigurator)
+
+| Setting                     | Value                  | Why |
+|-----------------------------|------------------------|-----|
+| Protocol                    | HTTPS (SSL/TLS)        | Admin credentials never cross the network in clear text |
+| WebGUI redirect             | **Disabled**           | The GUI no longer listens on port 80. Port 80 belongs only to the DVWA port forward, and the GUI is HTTPS-only |
+| HSTS                        | Enabled (default)      | Browsers are forced to use HTTPS for the GUI |
+| Certificate                 | webConfigurator default (self-signed) | Acceptable in the lab. Production would use a certificate from an internal CA |
+
+## Time (Phase 6)
+
+| Setting       | Value              | Why |
+|---------------|--------------------|-----|
+| Time servers  | `10.10.10.254` (R1) | One time source for the whole lab |
+| Timezone      | `Etc/UTC`          | Before this, pfSense logged in Israel time while Kali and Ubuntu-Web logged in UTC. Correlating events needed manual offset math |
+
+`Status > NTP` shows R1 as the active peer with reach `377` (the last 8 polls all succeeded).
+
+## Remote Logging (Phase 6)
+
+`Status > System Logs > Settings > Remote Logging Options`
+
+| Setting              | Value                 |
+|----------------------|-----------------------|
+| Enable remote logging| Yes                   |
+| Source address       | LAN (`10.10.10.253`)  |
+| IP protocol          | IPv4                  |
+| Remote log servers   | `192.168.30.10:514`   |
+| Remote syslog contents | System events, Firewall events |
+
+- The source is the LAN interface, because that is the address Wazuh allows (`allowed-ips`) in its syslog listener.
+- Firewall events arrive in Wazuh as `filterlog` lines, decoded by the built-in `pf` decoder. Blocked packets match rule **87701** (level 5).
