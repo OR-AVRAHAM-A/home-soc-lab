@@ -109,7 +109,7 @@ Real problems I hit while building the lab, how I diagnosed them, and what I lea
 | | |
 |---|---|
 | **Cause** | `msiexec /q` returns immediately (asynchronous). `Start-Service` ran before the installer finished, and the first attempt was in a non-elevated shell. |
-| **Fix** | Elevated PowerShell, and wait for the installer, with a verbose log for evidence: `Start-Process msiexec.exe -ArgumentList '/i wazuh-agent-4.14.9-1.msi /q WAZUH_MANAGER=192.168.30.10 WAZUH_AGENT_GROUP=windows /l*v C:\agent-kit\install.log' -Wait` |
+| **Fix** | Elevated PowerShell, and wait for the installer, with a verbose log for evidence: `Start-Process msiexec.exe -ArgumentList '/i <agent>.msi /q WAZUH_MANAGER=192.168.30.10 WAZUH_AGENT_GROUP=windows /l*v C:\agent-kit\install.log' -Wait` |
 | **Also** | PowerShell commands typed into `cmd.exe` fail. Type `powershell` first. |
 
 ### 14. The SIEM was down for 3 hours 21 minutes
@@ -171,3 +171,55 @@ Real problems I hit while building the lab, how I diagnosed them, and what I lea
 | **Cause** | The example snippet included context lines (`ports`, `restart`, `db:`). They were pasted too, so `dvwa` had two `ports:` and an empty `db:` appeared. |
 | **Risk** | In YAML a duplicate key is an error or silently overrides the first one. An empty `db:` could have removed the database service. |
 | **Fix** | Remove the duplicates, then validate without starting anything: `docker compose config --quiet && echo OK`. |
+
+## Phase 7: AD Hardening
+
+### 21. GPO "applied" but the entire audit policy went to No Auditing
+
+| | |
+|---|---|
+| **Symptom** | After linking the Advanced Audit GPO and `gpupdate /force`, every audit subcategory showed `No Auditing` — including ones that worked before. |
+| **Evidence** | `audit.csv` in SYSVOL was correct (18 rows). The GPO editor showed the settings. But `gpresult` had **no** Advanced Audit Configuration section, and the local cache (`C:\Windows\security\audit\audit.csv`) was an older, shorter version. |
+| **Cause** | The GPO was not registered in AD as using the Advanced Audit **CSE**. `gPCMachineExtensionNames` lacked `{F3CCC681-...}`. The DC skipped the audit settings, and because Advanced Audit **replaces** the whole policy, "skipped" meant everything off. |
+| **Fix** | Re-save one audit setting in the GPO editor (toggle off/on). That re-registers the CSE (versionNumber 2 → 4). `gpupdate /force`, then the settings applied. |
+| **Lesson** | "Applied GPOs" in gpresult ≠ settings took effect. Verify in the result (`auditpol`), not the tool. Advanced Audit via GPO replaces the whole policy — a GPO that half-applies blinds the DC. |
+
+### 22. LDAP signing would not apply (GPO precedence)
+
+| | |
+|---|---|
+| **Symptom** | `LDAPServerIntegrity` stayed `1` (None) after gpupdate, after a reboot, with the GPO correct. |
+| **Ruled out** | GptTmpl.inf had `LDAPServerIntegrity=4,2`; Security CSE registered; SMB signing (same CSE, other GPO) applied; reboot did nothing. |
+| **Cause** | `Default Domain Controllers Policy` explicitly sets LDAP signing to None (`=4,1`) and has link order 1 (highest precedence), overriding the Hardening GPO at order 3. |
+| **Fix** | Mark the Hardening GPO link **Enforced** — it then wins regardless of order, without editing the built-in policy. `LDAPServerIntegrity` became 2. |
+| **Lesson** | Lower link order = higher precedence. Enforced overrides precedence and can't be blocked — the correct tool for a baseline. My reboot guess was wrong; precedence was the cause. |
+
+### 23. Cmdlets showed blank / wrong values for GPO-applied settings
+
+| | |
+|---|---|
+| **Cause** | `Get-DnsClientGlobalSetting` and `Get-SmbServerConfiguration` read the **local** value, not the policy-enforced one, so they returned `$null`. Also the SMB registry value is `RequireSecuritySignature`, not `RequireSecuritySigning`. |
+| **Fix** | Verify GPO-applied settings via the policy registry keys (under `SOFTWARE\Policies\...` or the service's Parameters), with the exact value name. |
+
+### 24. A custom decoder/rule was needed for 4739 (no alert)
+
+| | |
+|---|---|
+| **Symptom** | `4739` (Domain Policy changed) was in the DC Security log but never appeared in the Wazuh dashboard. |
+| **Cause** | 4739 matched only the generic level-0 Windows rule (60103), so no alert was generated — same class as the R1 ACL event 4716. |
+| **Fix** | Custom rule 100200 (`if_sid 60103`, field `win.system.eventID = 4739`), modelled on the parent of an existing 4725 alert. |
+
+### 25. Computer object name differs from the agent name
+
+| | |
+|---|---|
+| **Symptom** | `Get-ADComputer WIN10` → not found, although the client is domain-joined and the Wazuh agent is "WIN10". |
+| **Cause** | The Wazuh agent name is not the AD computer name. The real object is `CLIENT-01` under `OU=PentTest,OU=Workstations`. |
+| **Fix** | `Get-ADComputer -Filter *` to find the real name/DN before targeting LAPS. |
+
+### 26. LAPS CSE install silently did nothing
+
+| | |
+|---|---|
+| **Cause** | `msiexec /quiet` run as a non-elevated domain user failed silently (no local admin rights) — same class as the Wazuh agent install. |
+| **Fix** | `Start-Process msiexec.exe -ArgumentList '... /l*v C:\agent-kit\laps-install.log' -Verb RunAs -Wait`, authenticating as Administrator. Verified via `Test-Path` and "Installation success or error status: 0" in the log. |

@@ -124,12 +124,29 @@ See [ubuntu-web.md](ubuntu-web.md) for how the DVWA container writes these files
   </rule>
 
 </group>
+
+<!-- Phase 7: AD domain policy change (4739) matches only the level-0 generic
+     Windows rule 60103, so it never alerts. Elevate it. -->
+<group name="windows,lab_custom,">
+
+  <rule id="100200" level="8">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4739$</field>
+    <description>AD: Domain policy changed on $(win.system.computer) by $(win.eventdata.subjectUserName) - review password/lockout/Kerberos settings</description>
+    <mitre>
+      <id>T1484.001</id>
+    </mitre>
+    <group>policy_changed,ad_hardening,</group>
+  </rule>
+
+</group>
 ```
 
 | Rule   | Level | Meaning |
 |--------|-------|---------|
 | 100100 | 8     | One blocked connection attempt from the DMZ to an internal network |
 | 100101 | 10    | Correlation: 5+ blocked attempts from the same DMZ host within 60 seconds. When it fires, it replaces the 100100 alert for that event |
+| 100200 | 8     | AD domain policy changed (event 4739): password/lockout/Kerberos settings modified (T1484.001) |
 
 Custom rule IDs use the 100000-120000 range reserved for local rules.
 

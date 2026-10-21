@@ -4,7 +4,7 @@ A home lab that simulates a small enterprise network (`cyber.local`). I use it t
 
 It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Workstation** (Active Directory, a Windows client, Kali Linux, and a Wazuh SIEM).
 
-> Status: 🚧 In progress. Network, firewall and DMZ phases complete. Logging is in place: a Wazuh SIEM collects from all hosts and network devices, with custom detections for the DMZ.
+> Status: 🚧 In progress. Network, firewall, DMZ and logging phases complete. Active Directory is hardened across audit policy, privileged accounts, password/lockout policy, protocols, Kerberos and LAPS — every change verified in the SIEM.
 
 ---
 
@@ -49,8 +49,8 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 | 4 | Firewall (pfSense)            | ✅ Done       |
 | 5 | DMZ web server (DVWA) + DMZ isolation | ✅ Done       |
 | 6 | Logging (NTP, Wazuh, Sysmon, syslog, custom detections) | ✅ Done |
-| 7 | Active Directory hardening    | 🔄 Next       |
-| 8 | Attack simulation             | ⏳ Planned    |
+| 7 | Active Directory hardening    | ✅ Done       |
+| 8 | Attack simulation             | 🔄 Next       |
 | 9 | Detection & Investigation     | ⏳ Planned    |
 | 10 | Incident Report              | ⏳ Planned    |
 
@@ -89,10 +89,23 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 - **Incident during the build:** a decoder change stopped the manager for 3 h 21 min without anyone noticing. Root cause, fix and a safe change procedure are documented.
 - Details: [docs/logging-design.md](docs/logging-design.md), [configs/wazuh.md](configs/wazuh.md), [verification/phase6-logging.md](verification/phase6-logging.md), [docs/troubleshooting-log.md](docs/troubleshooting-log.md)
 
+## AD Hardening (Phase 7)
+
+Done after the SIEM was live, so every change is visible in Wazuh (and so is any attacker who reverts it).
+
+- **Audit policy:** Advanced Audit Policy GPO turns on the logging the DC was missing (Kerberos, account management, DS access, policy change). The dangerous AD attacks are *successful* events — detection keys on anomalous fields (RC4 ticket, pre-auth 0), not failures.
+- **Privileged accounts:** Domain Admins cut from 14 to 1 (a nested `PenTest` group was granting it). ~91 dormant accounts disabled in one pipeline. An AS-REP-roastable account fixed and disabled.
+- **Password/lockout:** min length 4 → 14, lockout Never → 15/15 min. New custom rule **100200** alerts on domain policy changes (event 4739, T1484.001).
+- **Protocols:** LLMNR off, SMBv1 removed, SMB signing and LDAP signing required (LDAP needed an *Enforced* GPO to beat the Default Domain Controllers Policy).
+- **Kerberos:** AES only, RC4/DES disabled — Kerberoasting made impractical.
+- **LAPS:** unique, rotating local admin password per machine, stored in AD — blocks lateral movement via a shared local admin (T1550.002).
+- Details: [configs/ad-hardening.md](configs/ad-hardening.md), [docs/ad-hardening-design.md](docs/ad-hardening-design.md), [verification/phase7-ad-hardening.md](verification/phase7-ad-hardening.md)
+
 ## Known Risks
 
 - Kali has a second adapter (VMware NAT) that bypasses pfSense. It is kept **disconnected** and enabled only for updates.
 - Any internal VLAN can open SSH to the DMZ and to Wazuh (planned: allow only from VLAN 30). SSH uses passwords (planned: keys).
+- AD hardening gaps, deferred on purpose: NBT-NS still on (per-interface, low value with one client); Windows LAPS not available (used Legacy LAPS); no dedicated LAPS-readers or admin-tier accounts yet. See [docs/ad-hardening-design.md](docs/ad-hardening-design.md).
 - pfSense is managed from the Users VLAN (planned: admin GUI reachable only from VLAN 30).
 - pfSense CE 2.6.0 (2022) is outdated; newer CE releases exist. Acceptable in an isolated lab, but it would be patched in production.
 - Wazuh has no internet, so its vulnerability feed is frozen. The server has 6 GB RAM, below the recommended size for production.
