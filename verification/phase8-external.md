@@ -111,3 +111,5 @@ Two triage points worth keeping:
 
 - **Attribution.** The ACL log `srcip` is `192.168.99.10` — the DMZ **host**, not the container. Container ICMP egresses through the host's network namespace, so the firewall and the SIEM attribute the activity to the web server. The red flag an analyst reads: *why is a DMZ web server suddenly pinging the DC?*
 - **Why 100101 did not fire.** The correlation rule needs 5+ denies from one source in 60 s; only 3 subnets were probed. Correct behaviour — a careful attacker who touches only a few targets stays under the correlation threshold, which is exactly why the single-event rule 100100 (level 8) must still be triaged, not dismissed as noise.
+
+**Evidence:** [screenshots/phase8/](../screenshots/phase8/) — `partA-*`

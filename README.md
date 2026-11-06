@@ -135,6 +135,7 @@ Two pre-policy weak passwords were also found and fixed — including the sole D
 - The Cisco decoder file is a modified copy of the default and does not receive Wazuh updates. It must be compared after every upgrade.
 - R1 ACL logging is a weak scan sensor (delayed reporting). A dedicated IDS is a future improvement.
 - No alert yet when a log source or the manager itself goes silent.
+- Passwords set before the tightened 14-character policy are not forced to change until they expire. Two such accounts (`danih` and the built-in `Administrator`, the sole Domain Admin) were found during Phase 8 and reset. A periodic audit for sub-policy-length passwords is a future improvement.
 
 ## Repository Structure
 

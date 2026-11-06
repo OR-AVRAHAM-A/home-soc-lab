@@ -2,6 +2,8 @@
 
 Assume-breach: the attacker already has a foothold on the Users VLAN (a phished workstation). Kali was re-cabled in EVE-NG from the WAN segment to a free SW1 access port in VLAN 10, with a static address `192.168.10.50`. From here it reaches the DC on all AD ports — intentionally, because workstations must authenticate against the DC. All timestamps UTC.
 
+> This attacker port (SW1 `e1/1`) was enabled on VLAN 10 **for the internal testing only**. The committed switch baseline keeps `e1/1` shut and in the black-hole VLAN 666; it is reverted there once internal testing is complete.
+
 ```bash
 ping 192.168.100.100     # DC reachable (ttl=127 = Windows, 1 hop through R1)
 nslookup cyber.local     # 192.168.100.100  — the DC is also the DNS
@@ -198,3 +200,5 @@ Re-running the DCSync fired **100510** (level 13), two events (the two replicati
 ## Outcome
 
 The full AD kill chain — recon, user enumeration, spraying, AS-REP, Kerberoasting, DCSync — was run from an internal foothold. Every technique was **blocked or made useless by the Phase 7 hardening**, and every one is now **either detected by a built-in rule or by a custom rule written to close the gap**.
+
+**Evidence:** [screenshots/phase8/](../screenshots/phase8/) — `partB-*`
