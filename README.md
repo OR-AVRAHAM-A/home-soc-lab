@@ -4,7 +4,7 @@ A home lab that simulates a small enterprise network (`cyber.local`). I use it t
 
 It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Workstation** (Active Directory, a Windows client, Kali Linux, and a Wazuh SIEM).
 
-> Status: 🚧 In progress. Network, firewall, DMZ and logging phases complete. Active Directory is hardened across audit policy, privileged accounts, password/lockout policy, protocols, Kerberos and LAPS — every change verified in the SIEM.
+> Status: 🚧 In progress. Network, firewall, DMZ, logging and AD-hardening phases complete. The lab has now been **attacked end-to-end** — external web attacks and an internal assume-breach against Active Directory. Every technique was blocked or made useless by the hardening, and every detection gap found was closed with a custom rule. Detection & investigation and the incident report are next.
 
 ---
 
@@ -50,8 +50,8 @@ More detail is in [docs/ip-plan.md](docs/ip-plan.md).
 | 5 | DMZ web server (DVWA) + DMZ isolation | ✅ Done       |
 | 6 | Logging (NTP, Wazuh, Sysmon, syslog, custom detections) | ✅ Done |
 | 7 | Active Directory hardening    | ✅ Done       |
-| 8 | Attack simulation             | 🔄 Next       |
-| 9 | Detection & Investigation     | ⏳ Planned    |
+| 8 | Attack simulation (external + internal AD) | ✅ Done |
+| 9 | Detection & Investigation     | 🔄 Next       |
 | 10 | Incident Report              | ⏳ Planned    |
 
 ## Network Hardening Applied (so far)
@@ -100,6 +100,29 @@ Done after the SIEM was live, so every change is visible in Wazuh (and so is any
 - **Kerberos:** AES only, RC4/DES disabled — Kerberoasting made impractical.
 - **LAPS:** unique, rotating local admin password per machine, stored in AD — blocks lateral movement via a shared local admin (T1550.002).
 - Details: [configs/ad-hardening.md](configs/ad-hardening.md), [docs/ad-hardening-design.md](docs/ad-hardening-design.md), [verification/phase7-ad-hardening.md](verification/phase7-ad-hardening.md)
+
+## Attack Simulation (Phase 8)
+
+The lab was attacked purple-team style — every technique paired with *"was it blocked, and was it detected?"* — from two realistic positions.
+
+**Part A — external** (no credentials, only DVWA on TCP/80 is reachable):
+
+- **Recon** (`nmap -p-`): only TCP/80 open — pfSense default-deny holds. *Gap found:* firewall blocks never alerted (pfSense forwards `filterlog` without a hostname). Closed with a custom decoder + rules **100300/100301** (port scan, T1046/T1595).
+- **SQLi** → user hashes dumped; detected by built-in rule 31164. **XSS** → cookie stolen; no server-side signal (documented gap). **Web brute force** → *gap found* (rule 31108 eats `login.php` at level 0), closed with **100400/100401** (T1110).
+- **Command injection → RCE** (`uid=33(www-data)`): detection gap — the payload is in the POST body, which `access.log` does not record.
+- **Lateral movement** (DMZ → internal): **blocked by R1's `DMZ-IN` ACL** and detected by rule 100100. The web app fell; segmentation kept the blast radius in the DMZ.
+
+**Part B — internal / assume-breach** (Kali moved to the Users VLAN, then one phished domain user):
+
+- **Enumeration** (SMB null session, anonymous LDAP): denied. **Kerberos user enum**: leaks two names but **0 AS-REP-roastable** accounts (Phase 7). **Password spray**: policy held; spray signature detected by built-in rules 60122/60204.
+- **Kerberoasting**: demonstrated against a honeypot service account — the ticket comes back **AES256**, uncrackable with the attacker's tooling and a 20-char password. The successful request is benign-looking, so a classic rule misses it. Closed with a **honeypot rule 100500**.
+- **DCSync**: **denied** to a normal user; succeeds only as the sole Domain Admin (dumping `krbtgt` — Golden-Ticket material). The replication event is benign-looking; closed with **rule 100510** (replication requested by a non-machine account, T1003.006).
+
+**Key lesson:** the two most dangerous AD attacks (Kerberoasting, DCSync) leave only *successful, legitimate-looking* events, and the AES hardening that prevents Kerberoasting also erases its classic RC4 signature. These are detected by **behaviour** (a honeypot SPN; replication from a non-DC principal), not signatures.
+
+Two pre-policy weak passwords were also found and fixed — including the sole Domain Admin's 8-character `Pa$$word`. Minimising privilege and strengthening the surviving account are the same job.
+
+- Details: [docs/attack-simulation-design.md](docs/attack-simulation-design.md), [verification/phase8-external.md](verification/phase8-external.md), [verification/phase8-internal-ad.md](verification/phase8-internal-ad.md), [configs/wazuh.md](configs/wazuh.md)
 
 ## Known Risks
 

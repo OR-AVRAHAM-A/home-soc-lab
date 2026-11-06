@@ -203,3 +203,133 @@ Custom rule IDs use the 100000-120000 range reserved for local rules.
 ```
 
 See the incident in [troubleshooting-log.md](../docs/troubleshooting-log.md#14-the-siem-was-down-for-3-hours-21-minutes).
+
+---
+
+# Phase 8 custom detections (attack simulation)
+
+Four detection gaps found while attacking the lab were closed with custom decoders and rules. See [../verification/phase8-external.md](../verification/phase8-external.md) and [../verification/phase8-internal-ad.md](../verification/phase8-internal-ad.md) for how each was discovered and tested.
+
+## Custom decoder: pfSense `filterlog`
+
+**Gap:** pfSense forwards `filterlog` over syslog **without a hostname**. Wazuh's pre-decoder reads `filterlog[pid]:` as the hostname, so the built-in pfSense decoder (keyed on the program name) never matches, and firewall blocks produced no alert.
+
+```xml
+<decoder name="pfsense-filterlog">
+  <prematch type="pcre2">filterlog\[\d+\]: </prematch>
+  <regex type="pcre2">filterlog\[\d+\]: [^,]*,[^,]*,[^,]*,\d+,(\w+),\w+,block,(\w+),\d+,[^,]*,[^,]*,\d*,\d*,\d*,[^,]*,\d*,(\w+),\d*,(\d+\.\d+\.\d+\.\d+),(\d+\.\d+\.\d+\.\d+),(\d+),(\d+)</regex>
+  <order>interface,direction,protocol,srcip,dstip,srcport,dstport</order>
+</decoder>
+```
+
+- The `filterlog` CSV has ~29 fields; the regex skips to interface, direction, protocol, the two IPs and the two ports.
+- Verified with `wazuh-logtest`: `srcip`/`dstip`/`dstport`/`protocol` populate, which `<same_source_ip />` correlation needs.
+
+## Custom rules (added to `/var/ossec/etc/rules/local_rules.xml`)
+
+### pfSense firewall / port scan
+
+```xml
+<group name="pfsense,lab_custom,">
+
+  <rule id="100300" level="3">
+    <decoded_as>pfsense-filterlog</decoded_as>
+    <description>pfSense: blocked $(protocol) from $(srcip) to $(dstip):$(dstport) on $(interface)</description>
+    <group>firewall_block,</group>
+  </rule>
+
+  <rule id="100301" level="10" frequency="15" timeframe="30" ignore="60">
+    <if_matched_sid>100300</if_matched_sid>
+    <same_source_ip />
+    <description>pfSense: port scan - 15+ blocked connections from $(srcip) in 30s</description>
+    <mitre>
+      <id>T1046</id>
+      <id>T1595</id>
+    </mitre>
+    <group>recon,firewall_block,</group>
+  </rule>
+
+</group>
+```
+
+`ignore="60"` was added after the first scan flooded ~85 alerts: once 100301 fires it stays quiet for 60 s.
+
+### Web login brute force
+
+**Gap:** built-in rule 31108 *Ignored URLs (simple queries)* consumes `login.php` web-access events at level 0.
+
+```xml
+<group name="web,lab_custom,">
+
+  <rule id="100400" level="3">
+    <if_sid>31108</if_sid>
+    <match>login.php</match>
+    <description>Web request to login page from $(srcip)</description>
+  </rule>
+
+  <rule id="100401" level="10" frequency="6" timeframe="30" ignore="60">
+    <if_matched_sid>100400</if_matched_sid>
+    <same_source_ip />
+    <description>Web login brute force: 6+ requests to login.php from $(srcip) in 30s</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>authentication_failures,attack,</group>
+  </rule>
+
+</group>
+```
+
+Lessons: `action`/`url` are **static** decoder fields, so they need `<match>`, not `<field name=...>`. And 100400 must be **level ≥ 1** — a level-0 rule is not counted by `if_matched_sid`, so 100401 would never fire.
+
+### Kerberoasting honeypot, and DCSync (AD)
+
+Both of these attacks succeed as **benign-looking events** that no default rule elevates. Detection is behavioural, not signature-based.
+
+```xml
+<group name="windows,lab_custom,">
+
+  <!-- Any service ticket for the decoy account svc-sql is malicious by definition -->
+  <rule id="100500" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">^4769$</field>
+    <field name="win.eventdata.serviceName">^svc-sql$</field>
+    <description>Kerberoasting HONEYPOT: TGS requested for decoy account svc-sql by $(win.eventdata.targetUserName) from $(win.eventdata.ipAddress) - T1558.003</description>
+    <mitre>
+      <id>T1558.003</id>
+    </mitre>
+    <group>kerberoasting,honeypot,attack,</group>
+  </rule>
+
+  <!-- Directory replication (DCSync) by a non-machine account -->
+  <rule id="100510" level="13">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">^4662$</field>
+    <field name="win.eventdata.properties">1131f6aa</field>
+    <field name="win.eventdata.subjectUserName" negate="yes">\$$</field>
+    <description>DCSync attempt: directory replication (Get-Changes) by non-machine account $(win.eventdata.subjectUserName) - T1003.006</description>
+    <mitre>
+      <id>T1003.006</id>
+    </mitre>
+    <group>dcsync,attack,</group>
+  </rule>
+
+</group>
+```
+
+- **100500** — `svc-sql` is a honeypot service account with an SPN that no legitimate process requests. Any `4769` for it = Kerberoasting. AES-only hardening removes the classic RC4 (`0x17`) signature, so the honeypot is what detects it. Zero false positives.
+- **100510** — legitimate replication is done by machine accounts (`DC$`); the `negate="yes"` on a trailing `$` keeps only user-account requesters (the attacker). GUID `1131f6aa` = DS-Replication-Get-Changes.
+
+## Cumulative custom rule table
+
+| Rule | Level | Fires on | MITRE | Phase |
+|------|-------|----------|-------|-------|
+| 100100 | 8 | R1 ACL DMZ deny (one host) | — | 6 |
+| 100101 | 10 | 5+ DMZ denies in 60 s | T1046 | 6 |
+| 100200 | 8 | AD domain policy changed (4739) | T1484.001 | 7 |
+| 100300 | 3 | pfSense firewall block | — | 8 |
+| 100301 | 10 | 15+ pfSense blocks from one source in 30 s | T1046, T1595 | 8 |
+| 100400 | 3 | request to `login.php` | — | 8 |
+| 100401 | 10 | 6+ `login.php` from one source in 30 s | T1110 | 8 |
+| 100500 | 12 | TGS for honeypot `svc-sql` (Kerberoasting) | T1558.003 | 8 |
+| 100510 | 13 | replication by a non-machine account (DCSync) | T1003.006 | 8 |
