@@ -10,7 +10,7 @@ It's built in **EVE-NG** (Cisco IOL router and switch, pfSense) and **VMware Wor
 
 ## Architecture
 
-![Topology](diagrams/topology-v3.png)
+![Topology](diagrams/topology-v4.png)
 
 | Segment       | VLAN | Subnet            | Gateway          | Hosts                          |
 |---------------|------|-------------------|------------------|--------------------------------|
